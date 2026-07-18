@@ -5,7 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <direct.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <chrono>
 #include <ctime>
@@ -20,6 +24,35 @@ namespace
 
 	std::ofstream result_output;
 	std::string result_path;
+
+	int create_directory(const char *path)
+	{
+#ifdef _WIN32
+		return _mkdir(path);
+#else
+		return mkdir(path, 0700);
+#endif
+	}
+
+	bool is_directory(const char *path)
+	{
+#ifdef _WIN32
+		struct _stat status = {};
+		return _stat(path, &status) == 0 && (status.st_mode & _S_IFDIR) != 0;
+#else
+		struct stat status = {};
+		return stat(path, &status) == 0 && S_ISDIR(status.st_mode);
+#endif
+	}
+
+	int protect_file(const char *path)
+	{
+#ifdef _WIN32
+		return _chmod(path, _S_IREAD | _S_IWRITE);
+#else
+		return chmod(path, 0600);
+#endif
+	}
 
 	std::string base58_encode(const unsigned char *input, size_t input_size)
 	{
@@ -60,10 +93,9 @@ namespace
 		{
 			result_directory = "result";
 		}
-		if (mkdir(result_directory, 0700) == 0 || errno == EEXIST)
+		if (create_directory(result_directory) == 0 || errno == EEXIST)
 		{
-			struct stat status = {};
-			if (stat(result_directory, &status) == 0 && S_ISDIR(status.st_mode))
+			if (is_directory(result_directory))
 			{
 				return true;
 			}
@@ -78,7 +110,11 @@ namespace
 			std::chrono::system_clock::now();
 		const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
 		struct tm utc_time = {};
+#ifdef _WIN32
+		gmtime_s(&utc_time, &now_time);
+#else
 		gmtime_r(&now_time, &utc_time);
+#endif
 		const long long milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
 										   now.time_since_epoch())
 										   .count() %
@@ -124,7 +160,7 @@ bool initialize_result_writer()
 		fprintf(stderr, "RESULT_WRITE_FAIL,cannot create %s\n", result_path.c_str());
 		return false;
 	}
-	if (chmod(result_path.c_str(), 0600) != 0)
+	if (protect_file(result_path.c_str()) != 0)
 	{
 		fprintf(stderr, "RESULT_WRITE_FAIL,cannot protect %s: %s\n",
 				result_path.c_str(), strerror(errno));

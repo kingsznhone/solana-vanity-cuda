@@ -51,6 +51,51 @@ static void request_stop(int)
 	stop_requested = 1;
 }
 
+#ifdef _WIN32
+struct signal_state
+{
+	void (*sigint)(int);
+	void (*sigterm)(int);
+};
+
+static signal_state install_signal_handlers()
+{
+	signal_state previous = {
+		std::signal(SIGINT, request_stop),
+		std::signal(SIGTERM, request_stop)};
+	return previous;
+}
+
+static void restore_signal_handlers(const signal_state &previous)
+{
+	std::signal(SIGINT, previous.sigint);
+	std::signal(SIGTERM, previous.sigterm);
+}
+#else
+struct signal_state
+{
+	struct sigaction sigint;
+	struct sigaction sigterm;
+};
+
+static signal_state install_signal_handlers()
+{
+	signal_state previous = {};
+	struct sigaction action = {};
+	action.sa_handler = request_stop;
+	sigemptyset(&action.sa_mask);
+	sigaction(SIGINT, &action, &previous.sigint);
+	sigaction(SIGTERM, &action, &previous.sigterm);
+	return previous;
+}
+
+static void restore_signal_handlers(const signal_state &previous)
+{
+	sigaction(SIGINT, &previous.sigint, NULL);
+	sigaction(SIGTERM, &previous.sigterm, NULL);
+}
+#endif
+
 /* -- Prototypes, Because C++ ----------------------------------------------- */
 
 bool vanity_setup(config &vanity, bool deterministic, const vanity_options &options);
@@ -61,32 +106,23 @@ void vanity_cleanup(config &vanity);
 int run_vanity_search(const vanity_options &options)
 {
 	stop_requested = 0;
-	struct sigaction action = {};
-	struct sigaction previous_sigint = {};
-	struct sigaction previous_sigterm = {};
-	action.sa_handler = request_stop;
-	sigemptyset(&action.sa_mask);
-	sigaction(SIGINT, &action, &previous_sigint);
-	sigaction(SIGTERM, &action, &previous_sigterm);
+	signal_state previous_signals = install_signal_handlers();
 
 	if (!initialize_result_writer())
 	{
-		sigaction(SIGINT, &previous_sigint, NULL);
-		sigaction(SIGTERM, &previous_sigterm, NULL);
+		restore_signal_handlers(previous_signals);
 		return 1;
 	}
 
 	config vanity = {};
 	if (!vanity_setup(vanity, false, options))
 	{
-		sigaction(SIGINT, &previous_sigint, NULL);
-		sigaction(SIGTERM, &previous_sigterm, NULL);
+		restore_signal_handlers(previous_signals);
 		return 1;
 	}
 	bool success = vanity_run(vanity, options);
 	vanity_cleanup(vanity);
-	sigaction(SIGINT, &previous_sigint, NULL);
-	sigaction(SIGTERM, &previous_sigterm, NULL);
+	restore_signal_handlers(previous_signals);
 	return success ? 0 : 1;
 }
 
