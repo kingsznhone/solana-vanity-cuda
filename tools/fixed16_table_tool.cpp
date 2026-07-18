@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <array>
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -321,8 +322,8 @@ namespace
 
 		Fixed16Sha256 hash;
 		std::vector<point_p3> points(FIXED16_TABLE_VALUES - 1);
-		std::vector<fe> prefixes(FIXED16_TABLE_VALUES - 1);
-		std::vector<fe> inverses(FIXED16_TABLE_VALUES - 1);
+		std::vector<std::array<int32_t, 10>> prefixes(FIXED16_TABLE_VALUES - 1);
+		std::vector<std::array<int32_t, 10>> inverses(FIXED16_TABLE_VALUES - 1);
 		unsigned char serialized[FIXED16_TABLE_ENTRY_SIZE];
 		unsigned char expected_bytes[FIXED16_TABLE_ENTRY_SIZE];
 
@@ -359,8 +360,8 @@ namespace
 				point_p1p1_to_p3(&points[value], &sum);
 			}
 
-			fe_copy(prefixes[0], points[0].Z);
-			if (field_is_zero(prefixes[0]))
+			fe_copy(prefixes[0].data(), points[0].Z);
+			if (field_is_zero(prefixes[0].data()))
 			{
 				std::cerr << "FIXED16_TABLE_FAIL,zero Z at position=" << position << ",value=1\n";
 				return false;
@@ -373,27 +374,27 @@ namespace
 							  << ",value=" << index + 1 << "\n";
 					return false;
 				}
-				fe_mul(prefixes[index], prefixes[index - 1], points[index].Z);
+				fe_mul(prefixes[index].data(), prefixes[index - 1].data(), points[index].Z);
 			}
 			fe accumulator;
-			fe_invert(accumulator, prefixes.back());
+			fe_invert(accumulator, prefixes.back().data());
 			for (size_t index = points.size(); index-- > 1;)
 			{
-				fe_mul(inverses[index], accumulator, prefixes[index - 1]);
+				fe_mul(inverses[index].data(), accumulator, prefixes[index - 1].data());
 				fe_mul(accumulator, accumulator, points[index].Z);
 			}
-			fe_copy(inverses[0], accumulator);
+			fe_copy(inverses[0].data(), accumulator);
 
 			for (uint32_t index = 0; index < points.size(); ++index)
 			{
 				precomp entry;
 				fe x;
 				fe y;
-				fe_mul(x, points[index].X, inverses[index]);
-				fe_mul(y, points[index].Y, inverses[index]);
+				fe_mul(x, points[index].X, inverses[index].data());
+				fe_mul(y, points[index].Y, inverses[index].data());
 				fe_add(entry.yplusx, y, x);
 				fe_sub(entry.yminusx, y, x);
-				fe_mul(entry.xy2d, points[index].T, inverses[index]);
+				fe_mul(entry.xy2d, points[index].T, inverses[index].data());
 				fe_mul(entry.xy2d, entry.xy2d, curve_d2);
 				canonicalize(entry.yplusx);
 				canonicalize(entry.yminusx);
