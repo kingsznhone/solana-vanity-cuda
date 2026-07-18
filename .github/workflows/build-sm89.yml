@@ -1,0 +1,49 @@
+name: Build Linux sm89 artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build solana-vanity-cuda for sm_89
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            libssl-dev
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.35
+        with:
+          cuda: '13.3'
+
+      - name: Build sm_89 release binary
+        env:
+          CUDA_ARCHITECTURES: '89'
+          VANITY_MAX_REGISTER_COUNT: '128'
+          VANITY_THREADS_PER_BLOCK: '512'
+          VANITY_ATTEMPTS_PER_EXECUTION: '10000'
+          BUILD_TYPE: Release
+        run: bash ./run build
+
+      - name: Verify build output
+        run: test -x build/release/solana-vanity-cuda
+
+      - name: Upload Linux sm89 artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: solana-vanity-cuda-linux-sm89
+          path: build/release/solana-vanity-cuda
+          if-no-files-found: error
+          retention-days: 14

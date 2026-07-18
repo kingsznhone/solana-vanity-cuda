@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="${BUILD_DIR:-${PROJECT_DIR}/build}"
+BUILD_TYPE="${BUILD_TYPE:-Release}"
+BUILD_JOBS="${BUILD_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN)}"
+if [[ -n "${CUDA_ARCHITECTURES:-}" ]]; then
+	CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}"
+elif cmake --version | awk 'NR == 1 { split($3, version, /\./); exit !(version[1] > 3 || (version[1] == 3 && version[2] >= 24)) }'; then
+	CUDA_ARCHITECTURES="native"
+else
+	CUDA_ARCHITECTURES="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n 1 | tr -d '.')"
+fi
+VANITY_MAX_REGISTER_COUNT="${VANITY_MAX_REGISTER_COUNT:-128}"
+VANITY_THREADS_PER_BLOCK="${VANITY_THREADS_PER_BLOCK:-512}"
+VANITY_ATTEMPTS_PER_EXECUTION="${VANITY_ATTEMPTS_PER_EXECUTION:-10000}"
+VANITY_FIXED16_TABLE_PATH="${VANITY_FIXED16_TABLE_PATH:-${PROJECT_DIR}/precomputed/fixed16-v1.bin}"
+
+usage() {
+	cat <<EOF
+Usage: ./run [build|start|precompute16|verify-precompute16|clean] [search options]
+
+Commands:
+  build  Configure and build the project
+	start  Generate the fixed16 table in memory, then run the vanity key finder
+	precompute16  Generate and verify the fixed-position 16-bit table
+	verify-precompute16  Verify an existing fixed-position 16-bit table
+  clean  Remove compiled objects from the build directory
+
+Environment:
+  BUILD_DIR   Build directory (default: ./build)
+  BUILD_TYPE  CMake build type (default: Release)
+  BUILD_JOBS  Number of parallel build jobs (default: detected CPU count)
+  CUDA_ARCHITECTURES  CUDA architectures (default: native)
+	VANITY_MAX_REGISTER_COUNT  auto or 128 (default: 128)
+	VANITY_THREADS_PER_BLOCK   256 or 512 (default: 512)
+	VANITY_ATTEMPTS_PER_EXECUTION  Candidates per thread and launch (default: 10000)
+	VANITY_FIXED16_TABLE_PATH  Fixed16 artifact path (default: ./precomputed/fixed16-v1.bin)
+EOF
+}
+
+build() {
+	local cuda_compiler="${CUDACXX:-$(command -v nvcc || true)}"
+	if [[ -z "${cuda_compiler}" && -x /usr/local/cuda/bin/nvcc ]]; then
+		cuda_compiler=/usr/local/cuda/bin/nvcc
+	fi
+	if [[ -z "${cuda_compiler}" ]]; then
+		echo "CUDA compiler not found; set CUDACXX or add nvcc to PATH." >&2
+		exit 1
+	fi
+
+	cmake -S "${PROJECT_DIR}" -B "${BUILD_DIR}" \
+		-DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+		-DCMAKE_CUDA_COMPILER="${cuda_compiler}" \
+		-DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
+				-DVANITY_MAX_REGISTER_COUNT="${VANITY_MAX_REGISTER_COUNT}" \
+				-DVANITY_THREADS_PER_BLOCK="${VANITY_THREADS_PER_BLOCK}" \
+		-DVANITY_ATTEMPTS_PER_EXECUTION="${VANITY_ATTEMPTS_PER_EXECUTION}"
+	cmake --build "${BUILD_DIR}" -j"${BUILD_JOBS}"
+}
+
+start() {
+	VANITY_FIXED16_TABLE_PATH="${VANITY_FIXED16_TABLE_PATH}" \
+	LD_LIBRARY_PATH="${BUILD_DIR}/release${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+		"${BUILD_DIR}/release/solana-vanity-cuda" "$@"
+}
+
+precompute16() {
+	mkdir -p "$(dirname "${VANITY_FIXED16_TABLE_PATH}")"
+	"${BUILD_DIR}/release/fixed16_table_tool" generate "${VANITY_FIXED16_TABLE_PATH}"
+	"${BUILD_DIR}/release/fixed16_table_tool" verify "${VANITY_FIXED16_TABLE_PATH}"
+}
+
+verify_precompute16() {
+	"${BUILD_DIR}/release/fixed16_table_tool" verify "${VANITY_FIXED16_TABLE_PATH}"
+}
+
+clean() {
+	cmake --build "${BUILD_DIR}" --target clean
+}
+
+case "${1:-help}" in
+	build)
+		build
+		;;
+	start)
+		shift
+		start "$@"
+		;;
+	precompute16)
+		precompute16
+		;;
+	verify-precompute16)
+		verify_precompute16
+		;;
+	clean)
+		clean
+		;;
+	help|-h|--help)
+		usage
+		;;
+	*)
+		usage >&2
+		exit 2
+		;;
+esac
