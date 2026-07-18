@@ -34,7 +34,7 @@ jobs:
             & cmake -S . -B $buildPath -G Ninja `
               -DCMAKE_BUILD_TYPE=Release `
               -DCMAKE_CUDA_COMPILER="${{ steps.cuda.outputs.CUDA_PATH }}/bin/nvcc.exe" `
-              -DCMAKE_CUDA_ARCHITECTURES=$architecture `
+              "-DCMAKE_CUDA_ARCHITECTURES=$architecture" `
               -DVANITY_MAX_REGISTER_COUNT=128 `
               -DVANITY_THREADS_PER_BLOCK=512 `
               -DVANITY_ATTEMPTS_PER_EXECUTION=10000
