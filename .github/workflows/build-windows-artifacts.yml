@@ -19,7 +19,6 @@ jobs:
         uses: Jimver/cuda-toolkit@v0.2.26
         id: cuda
         with:
-          cuda: 13.3.0
           method: network
 
       - name: Install OpenSSL
