@@ -1,0 +1,58 @@
+name: Build Windows CUDA artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Windows CUDA artifacts
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.26
+        id: cuda
+        with:
+          cuda: 13.3.0
+          method: network
+
+      - name: Install OpenSSL
+        shell: pwsh
+        run: choco install openssl --no-progress -y
+
+      - name: Build sm86, sm89, and sm120 release binaries
+        shell: pwsh
+        run: |
+          foreach ($architecture in 86, 89, 120) {
+            $buildPath = "build-sm$architecture"
+            & cmake -S . -B $buildPath -G Ninja `
+              -DCMAKE_BUILD_TYPE=Release `
+              -DCMAKE_CUDA_COMPILER="${{ steps.cuda.outputs.CUDA_PATH }}/bin/nvcc.exe" `
+              -DCMAKE_CUDA_ARCHITECTURES=$architecture `
+              -DVANITY_MAX_REGISTER_COUNT=128 `
+              -DVANITY_THREADS_PER_BLOCK=512 `
+              -DVANITY_ATTEMPTS_PER_EXECUTION=10000
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            & cmake --build $buildPath --parallel
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            $artifactPath = "artifacts/sm$architecture"
+            New-Item -ItemType Directory -Force -Path $artifactPath | Out-Null
+            Copy-Item "$buildPath/release/solana-vanity-cuda.exe" $artifactPath
+            Copy-Item "C:/Program Files/OpenSSL-Win64/bin/libcrypto-3-x64.dll" $artifactPath
+          }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: solana-vanity-cuda-windows
+          path: artifacts
+          if-no-files-found: error
+          retention-days: 14
