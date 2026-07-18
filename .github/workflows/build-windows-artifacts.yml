@@ -46,12 +46,27 @@ jobs:
             throw "OpenSSL libcrypto DLL not found"
           }
 
+          $crtRoot = Join-Path $env:VCToolsRedistDir "x64/Microsoft.VC143.CRT"
+          $crtDlls = @()
+          if (Test-Path $crtRoot) {
+            $crtDlls = @(Get-ChildItem -Path $crtRoot -Filter "*.dll" -File)
+          }
+          if ($crtDlls.Count -eq 0) {
+            $crtDlls = @(Get-ChildItem -Path "C:/Program Files/Microsoft Visual Studio" `
+              -Filter "*.dll" -File -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match "\\VC\\Redist\\MSVC\\.*\\x64\\Microsoft\.VC143\.CRT\\" })
+          }
+          if ($crtDlls.Count -eq 0) {
+            throw "MSVC runtime DLLs not found"
+          }
+
           foreach ($architecture in 86, 89, 120) {
             $buildPath = "build-sm$architecture"
             & cmake -S . -B $buildPath -G Ninja `
               -DCMAKE_BUILD_TYPE=Release `
               -DCMAKE_CUDA_COMPILER="${{ steps.cuda.outputs.CUDA_PATH }}/bin/nvcc.exe" `
               "-DCMAKE_CUDA_ARCHITECTURES=$architecture" `
+              -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
               -DVANITY_MAX_REGISTER_COUNT=128 `
               -DVANITY_THREADS_PER_BLOCK=512 `
               -DVANITY_ATTEMPTS_PER_EXECUTION=10000
@@ -64,6 +79,7 @@ jobs:
             New-Item -ItemType Directory -Force -Path $artifactPath | Out-Null
             Copy-Item "$buildPath/release/solana-vanity-cuda.exe" $artifactPath
             Copy-Item $opensslDll $artifactPath
+            Copy-Item $crtDlls $artifactPath
           }
 
       - name: Upload Windows artifacts

@@ -120,6 +120,8 @@ target_link_libraries(solana-vanity-cuda PRIVATE vanity-engine)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_test(NAME solana_vanity_cuda_help
+        COMMAND solana-vanity-cuda --help)
     add_test(NAME fixed16_table_tool_help
         COMMAND fixed16_table_tool --help)
     add_test(NAME fixed16_table_memory_generation

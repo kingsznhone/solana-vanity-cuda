@@ -59,11 +59,13 @@ static void print_usage(const char *program)
 				program);
 	std::printf("       %s --version\n", program);
 	std::printf("Without --prefix, the prefixes from config.h are used.\n");
+	std::fflush(stdout);
 }
 
 static void print_version(const char *program)
 {
 	std::printf("%s %s\n", program, VANITY_VERSION);
+	std::fflush(stdout);
 }
 
 static bool parse_options(int argc, char **argv, vanity_options &options)
