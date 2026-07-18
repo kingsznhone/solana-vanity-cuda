@@ -10,24 +10,21 @@ jobs:
   build:
     name: Build Linux CUDA artifacts sequentially
     runs-on: ubuntu-24.04
+    container:
+      image: nvidia/cuda:13.3.0-devel-ubuntu24.04
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Install host dependencies
+      - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
+          apt-get update
+          apt-get install --no-install-recommends -y \
             build-essential \
             cmake \
+            git \
             libssl-dev
-
-      - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.35
-        with:
-          cuda: '13.2.0'
-          method: network
 
       - name: Build sm86, sm89, and sm120 release binaries
         env:
