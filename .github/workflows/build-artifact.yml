@@ -1,0 +1,73 @@
+name: Build Linux CUDA artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Linux CUDA artifacts sequentially
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            libssl-dev
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.35
+        with:
+          cuda: '13.2.0'
+          method: network
+
+      - name: Build sm86, sm89, and sm120 release binaries
+        env:
+          VANITY_MAX_REGISTER_COUNT: '128'
+          VANITY_THREADS_PER_BLOCK: '512'
+          VANITY_ATTEMPTS_PER_EXECUTION: '10000'
+          BUILD_TYPE: Release
+        run: |
+          for architecture in 86 89 120; do
+            echo "Building sm_${architecture}..."
+            rm -rf "build-sm${architecture}"
+            CUDA_ARCHITECTURES="${architecture}" \
+              BUILD_DIR="${GITHUB_WORKSPACE}/build-sm${architecture}" \
+              bash ./run build
+            test -x "build-sm${architecture}/release/solana-vanity-cuda"
+            mkdir -p "artifacts/sm${architecture}"
+            cp "build-sm${architecture}/release/solana-vanity-cuda" \
+              "artifacts/sm${architecture}/solana-vanity-cuda"
+          done
+
+      - name: Upload Linux sm86 artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: solana-vanity-cuda-linux-sm86
+          path: artifacts/sm86/solana-vanity-cuda
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Linux sm89 artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: solana-vanity-cuda-linux-sm89
+          path: artifacts/sm89/solana-vanity-cuda
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Linux sm120 artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: solana-vanity-cuda-linux-sm120
+          path: artifacts/sm120/solana-vanity-cuda
+          if-no-files-found: error
+          retention-days: 14
