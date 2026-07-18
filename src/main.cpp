@@ -6,6 +6,10 @@
 #include <cstdlib>
 #include <cstring>
 
+#ifndef VANITY_VERSION
+#define VANITY_VERSION "unknown"
+#endif
+
 #define PREFIX_LITERAL(value) value,
 static const char *const default_prefixes[] = {VANITY_PREFIXES(PREFIX_LITERAL)};
 #undef PREFIX_LITERAL
@@ -53,7 +57,13 @@ static void print_usage(const char *program)
 {
 	std::printf("Usage: %s [--prefix PREFIX]... [--stop-after COUNT] [--max-iterations COUNT]\n",
 				program);
+	std::printf("       %s --version\n", program);
 	std::printf("Without --prefix, the prefixes from config.h are used.\n");
+}
+
+static void print_version(const char *program)
+{
+	std::printf("%s %s\n", program, VANITY_VERSION);
 }
 
 static bool parse_options(int argc, char **argv, vanity_options &options)
@@ -69,6 +79,11 @@ static bool parse_options(int argc, char **argv, vanity_options &options)
 		if (std::strcmp(argument, "--help") == 0 || std::strcmp(argument, "-h") == 0)
 		{
 			print_usage(argv[0]);
+			return false;
+		}
+		if (std::strcmp(argument, "--version") == 0 || std::strcmp(argument, "-V") == 0)
+		{
+			print_version(argv[0]);
 			return false;
 		}
 		if (std::strcmp(argument, "--prefix") == 0)
@@ -130,7 +145,9 @@ int main(int argc, char **argv)
 	if (!parse_options(argc, argv, options))
 	{
 		return argc > 1 && (std::strcmp(argv[1], "--help") == 0 ||
-							std::strcmp(argv[1], "-h") == 0)
+							std::strcmp(argv[1], "-h") == 0 ||
+							std::strcmp(argv[1], "--version") == 0 ||
+							std::strcmp(argv[1], "-V") == 0)
 				? 0
 				: 1;
 	}

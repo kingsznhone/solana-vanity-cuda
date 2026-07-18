@@ -65,6 +65,27 @@ The main executable is written to:
 build/release/solana-vanity-cuda
 ```
 
+### Versioning
+
+The application version is defined in `CMakeLists.txt` and defaults to
+`0.1.0`. Check the version of a built executable with:
+
+```bash
+build/release/solana-vanity-cuda --version
+```
+
+To override the version for a build, pass `VANITY_VERSION` to CMake:
+
+```bash
+cmake -S . -B build-version \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DVANITY_VERSION=0.2.0
+```
+
+Use Semantic Versioning for releases. Keep a release tag such as `v0.2.0`
+consistent with the executable version `0.2.0`. The GitHub Actions workflows
+remain manually triggered; release publishing is performed separately.
+
 To select a specific CUDA compiler, architecture, build directory, or build
 parallelism:
 
@@ -130,6 +151,7 @@ Available command-line options:
 | `--prefix PREFIX` | `src/config.h` | Search for a fixed leading Base58 prefix. May be specified multiple times, up to 16 prefixes. |
 | `--stop-after COUNT` | `1` | Stop after the requested number of matching keys have been found. |
 | `--max-iterations COUNT` | `100000` | Stop after the requested number of search iterations. |
+| `--version`, `-V` | N/A | Print the executable version. |
 | `--help`, `-h` | N/A | Print command-line usage. |
 
 Each prefix must be non-empty, contain only valid Base58 characters, and be no

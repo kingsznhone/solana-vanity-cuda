@@ -50,6 +50,26 @@ bash ./run build
 build/release/solana-vanity-cuda
 ```
 
+### 版本控制
+
+程序版本定义在 `CMakeLists.txt` 中，默认版本为 `0.1.0`。查看已编译程序
+的版本：
+
+```bash
+build/release/solana-vanity-cuda --version
+```
+
+可以在编译时通过 `VANITY_VERSION` 覆盖版本号：
+
+```bash
+cmake -S . -B build-version \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DVANITY_VERSION=0.2.0
+```
+
+发布版本遵循语义化版本规范。Git tag（例如 `v0.2.0`）应当与程序版本
+`0.2.0` 保持一致。GitHub Actions 仍然由手动触发，Release 发布单独进行。
+
 可以指定 CUDA 编译器、架构、构建目录和并行编译数量：
 
 ```bash
@@ -111,6 +131,7 @@ bash ./run start --prefix SoL --prefix CUDA
 | `--prefix PREFIX` | `src/config.h` | 搜索固定的 Base58 前缀。可以重复指定，最多支持 16 个前缀。 |
 | `--stop-after COUNT` | `1` | 找到指定数量的匹配密钥后停止。 |
 | `--max-iterations COUNT` | `100000` | 达到指定搜索迭代次数后停止。 |
+| `--version`、`-V` | 不适用 | 输出程序版本。 |
 | `--help`、`-h` | 不适用 | 输出命令行帮助。 |
 
 每个前缀必须非空，只能包含有效的 Base58 字符，长度不能超过 44 个字符。如果至少指定一个 `--prefix`，本次运行会使用命令行前缀替代 `src/config.h` 中的默认前缀列表。

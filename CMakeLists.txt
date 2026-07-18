@@ -16,7 +16,12 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
     endif()
 endif()
 
-project(ed25519_gpu_vanity LANGUAGES C CXX CUDA)
+project(ed25519_gpu_vanity VERSION 0.1.0 LANGUAGES C CXX CUDA)
+
+set(VANITY_VERSION "${PROJECT_VERSION}" CACHE STRING "Application version")
+if(NOT VANITY_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+([.-][0-9A-Za-z.-]+)?$")
+    message(FATAL_ERROR "VANITY_VERSION must be a valid SemVer-like version, got: ${VANITY_VERSION}")
+endif()
 
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 
@@ -108,6 +113,9 @@ target_link_libraries(vanity-engine PRIVATE fixed16-host-field)
 set_property(TARGET vanity-engine PROPERTY NO_SYSTEM_FROM_IMPORTED TRUE)
 
 add_executable(solana-vanity-cuda src/main.cpp)
+target_compile_definitions(solana-vanity-cuda PRIVATE
+    VANITY_VERSION="${VANITY_VERSION}"
+)
 target_link_libraries(solana-vanity-cuda PRIVATE vanity-engine)
 
 include(CTest)
