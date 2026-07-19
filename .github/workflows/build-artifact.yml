@@ -1,6 +1,9 @@
-name: Build Linux CUDA artifacts
+name: Build Linux artifacts
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
