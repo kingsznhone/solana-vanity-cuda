@@ -30,7 +30,7 @@
 - 支持 CUDA 的 NVIDIA GPU
 - CUDA Toolkit，包括 `nvcc`
 - CMake 3.22 或更高版本
-- 支持 C17/C++20 的主机编译器
+- 支持 C17/C++17 的主机编译器
 - `pkg-config`
 - OpenSSL 开发文件（Debian/Ubuntu 上通常为 `libssl-dev`）
 - `nvidia-smi` 位于 `PATH` 中

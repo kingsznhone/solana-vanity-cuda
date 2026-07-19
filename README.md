@@ -42,7 +42,7 @@ benchmarking, although individual cards may still benefit from local tuning.
 - NVIDIA GPU with CUDA support
 - CUDA Toolkit, including `nvcc`
 - CMake 3.22 or newer
-- A C17/C++20-capable host compiler
+- A C17/C++17-capable host compiler
 - `pkg-config`
 - OpenSSL development files (`libssl-dev` on Debian/Ubuntu)
 - `nvidia-smi` available in `PATH`

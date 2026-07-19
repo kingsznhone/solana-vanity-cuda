@@ -34,10 +34,15 @@ find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD 20)
+# The project does not require C++20 features. C++17 keeps the host and CUDA
+# toolchains aligned and improves compatibility with Ubuntu 22.04 baselines.
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CUDA_STANDARD 20)
+# CUDA device code only requires C++17. Keep the CUDA dialect at C++17 so the
+# project remains compatible with the CMake 3.22 toolchain in Ubuntu 22.04
+# CUDA release images.
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_EXTENSIONS OFF)
 set(VANITY_ATTEMPTS_PER_EXECUTION 10000 CACHE STRING "Candidates processed by each thread per kernel launch")
