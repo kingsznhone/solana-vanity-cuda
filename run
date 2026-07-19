@@ -5,24 +5,222 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-${PROJECT_DIR}/build}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
 BUILD_JOBS="${BUILD_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN)}"
-if [[ -n "${CUDA_ARCHITECTURES:-}" ]]; then
-	CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}"
-elif cmake --version | awk 'NR == 1 { split($3, version, /\./); exit !(version[1] > 3 || (version[1] == 3 && version[2] >= 24)) }'; then
-	CUDA_ARCHITECTURES="native"
-else
-	CUDA_ARCHITECTURES="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n 1 | tr -d '.')"
-fi
+CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES:-}"
+UNIVERSAL_CUDA_ARCHITECTURES="${UNIVERSAL_CUDA_ARCHITECTURES:-50;52;53;60;61;62;70;72;75;80;86;87;89;90;100;101;103;120;121}"
 VANITY_MAX_REGISTER_COUNT="${VANITY_MAX_REGISTER_COUNT:-128}"
 VANITY_THREADS_PER_BLOCK="${VANITY_THREADS_PER_BLOCK:-512}"
 VANITY_ATTEMPTS_PER_EXECUTION="${VANITY_ATTEMPTS_PER_EXECUTION:-10000}"
 VANITY_FIXED16_TABLE_PATH="${VANITY_FIXED16_TABLE_PATH:-${PROJECT_DIR}/precomputed/fixed16-v1.bin}"
 
+CUDA_COMPILER=""
+CUDA_TOOLKIT_VERSION=""
+CUDA_ARCHITECTURE_PROFILE=""
+CHECK_FAILURES=0
+
+info() {
+	printf '  [info] %s\n' "$*"
+}
+
+ok() {
+	printf '  [ ok ] %s\n' "$*"
+}
+
+warn() {
+	printf '  [warn] %s\n' "$*" >&2
+}
+
+error() {
+	printf '  [fail] %s\n' "$*" >&2
+	CHECK_FAILURES=$((CHECK_FAILURES + 1))
+}
+
+version_at_least() {
+	local actual="$1"
+	local required="$2"
+	[[ "$(printf '%s\n' "${required}" "${actual}" | sort -V | head -n 1)" == "${required}" ]]
+}
+
+require_command() {
+	local command_name="$1"
+	local install_hint="$2"
+	if command -v "${command_name}" >/dev/null 2>&1; then
+		ok "${command_name}: $(command -v "${command_name}")"
+	else
+		error "Missing command '${command_name}'. Install with: ${install_hint}"
+	fi
+}
+
+resolve_cuda_compiler() {
+	local candidate="${CUDACXX:-}"
+
+	if [[ -n "${candidate}" && "${candidate}" != */* ]]; then
+		candidate="$(command -v "${candidate}" 2>/dev/null || true)"
+	fi
+	if [[ -z "${candidate}" ]]; then
+		candidate="$(command -v nvcc 2>/dev/null || true)"
+	fi
+	if [[ -z "${candidate}" && -x /usr/local/cuda/bin/nvcc ]]; then
+		candidate=/usr/local/cuda/bin/nvcc
+	fi
+
+	if [[ -z "${candidate}" || ! -x "${candidate}" ]]; then
+		error "CUDA compiler 'nvcc' was not found. Set CUDACXX=/path/to/nvcc or add nvcc to PATH."
+		return
+	fi
+
+	CUDA_COMPILER="${candidate}"
+	CUDA_TOOLKIT_VERSION="$("${CUDA_COMPILER}" --version 2>/dev/null \
+		| sed -nE 's/.*release ([0-9]+\.[0-9]+).*/\1/p' | tail -n 1)"
+	if [[ -z "${CUDA_TOOLKIT_VERSION}" ]]; then
+		error "Unable to determine the CUDA Toolkit version from ${CUDA_COMPILER}."
+	else
+		ok "CUDA Toolkit ${CUDA_TOOLKIT_VERSION}: ${CUDA_COMPILER}"
+		if ! version_at_least "${CUDA_TOOLKIT_VERSION}" "12.8"; then
+			warn "CUDA ${CUDA_TOOLKIT_VERSION} can build older native architectures, but CUDA 12.8+ is required for sm_120/Blackwell targets."
+		fi
+	fi
+}
+
+resolve_cuda_architectures() {
+	if [[ -n "${CUDA_ARCHITECTURES}" ]]; then
+		if [[ "${CUDA_ARCHITECTURES}" == universal ]]; then
+			CUDA_ARCHITECTURE_PROFILE=universal
+			CUDA_ARCHITECTURES="${UNIVERSAL_CUDA_ARCHITECTURES}"
+			info "CUDA architectures: universal (${CUDA_ARCHITECTURES})"
+			return
+		fi
+		info "CUDA architectures: ${CUDA_ARCHITECTURES} (explicit)"
+		return
+	fi
+
+	local cmake_version="$(cmake --version 2>/dev/null | awk 'NR == 1 { print $3 }')"
+	if [[ -n "${cmake_version}" ]] && version_at_least "${cmake_version}" "3.24"; then
+		CUDA_ARCHITECTURES=native
+		info "CUDA architectures: native (detected by CMake ${cmake_version})"
+		if ! command -v nvidia-smi >/dev/null 2>&1; then
+			error "CUDA_ARCHITECTURES defaults to native, but nvidia-smi is unavailable. Set CUDA_ARCHITECTURES explicitly for a GPU-less build, for example CUDA_ARCHITECTURES=86."
+		elif ! nvidia-smi -L >/dev/null 2>&1; then
+			error "CUDA_ARCHITECTURES defaults to native, but no usable NVIDIA GPU was detected. Set CUDA_ARCHITECTURES explicitly for a cross-build."
+		fi
+		return
+	fi
+
+	if ! command -v nvidia-smi >/dev/null 2>&1; then
+		error "CMake before 3.24 needs nvidia-smi to detect the CUDA architecture. Install it or set CUDA_ARCHITECTURES explicitly."
+		return
+	fi
+
+	local capability
+	capability="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+		| head -n 1 | tr -d '.[:space:]')"
+	if [[ -z "${capability}" ]]; then
+		error "Unable to detect a GPU compute capability. Set CUDA_ARCHITECTURES explicitly, for example CUDA_ARCHITECTURES=86."
+	else
+		CUDA_ARCHITECTURES="${capability}"
+		info "CUDA architectures: ${CUDA_ARCHITECTURES} (detected from nvidia-smi)"
+	fi
+}
+
+check_build_environment() {
+	printf 'Checking build environment...\n'
+
+	if [[ "${OSTYPE:-}" != linux* ]]; then
+		error "This launcher build path requires Linux. Use the Windows build instructions on Windows."
+	fi
+
+	if [[ -r /etc/os-release ]]; then
+		# shellcheck disable=SC1091
+		source /etc/os-release
+		if [[ "${ID:-}" == ubuntu ]]; then
+			ok "OS: Ubuntu ${VERSION_ID:-unknown}"
+			case "${VERSION_ID:-}" in
+				22.04|24.04) ;;
+				*) warn "Ubuntu ${VERSION_ID:-unknown} is not the primary tested baseline; Ubuntu 22.04 and 24.04 are recommended." ;;
+			esac
+		elif [[ "${ID_LIKE:-}" == *debian* || "${ID:-}" == debian ]]; then
+			warn "OS: ${PRETTY_NAME:-Debian-based Linux}. Ubuntu 22.04/24.04 is the primary tested environment."
+		else
+			warn "OS: ${PRETTY_NAME:-unknown Linux}. Ubuntu 22.04/24.04 is the primary tested environment."
+		fi
+	else
+		error "Cannot identify the Linux distribution because /etc/os-release is missing."
+	fi
+
+	if command -v cmake >/dev/null 2>&1; then
+		local cmake_version="$(cmake --version | awk 'NR == 1 { print $3 }')"
+		if version_at_least "${cmake_version}" "3.22"; then
+			ok "CMake ${cmake_version}"
+		else
+			error "CMake ${cmake_version} is too old; version 3.22 or newer is required. Install with: sudo apt install cmake"
+		fi
+	else
+		error "Missing command 'cmake'. Install with: sudo apt install cmake"
+	fi
+
+	require_command gcc "sudo apt install build-essential"
+	require_command g++ "sudo apt install build-essential"
+	require_command make "sudo apt install build-essential"
+	require_command pkg-config "sudo apt install pkg-config"
+	resolve_cuda_compiler
+
+	if command -v pkg-config >/dev/null 2>&1; then
+		if pkg-config --exists openssl; then
+			ok "OpenSSL development files: $(pkg-config --modversion openssl)"
+		else
+			error "OpenSSL development files were not found. Install with: sudo apt install libssl-dev"
+		fi
+	fi
+}
+
+validate_build_environment() {
+	if [[ "${CUDA_ARCHITECTURE_PROFILE}" == universal ]]; then
+		if [[ -z "${CUDA_TOOLKIT_VERSION}" ]] || ! version_at_least "${CUDA_TOOLKIT_VERSION}" "12.9"; then
+			error "CUDA_ARCHITECTURES=universal requires CUDA Toolkit 12.9.x because it includes sm_103 and sm_121."
+		elif version_at_least "${CUDA_TOOLKIT_VERSION}" "13.0"; then
+			error "CUDA_ARCHITECTURES=universal includes Maxwell targets and must be built with CUDA 12.9.x; CUDA 13.x no longer provides the required sm_50 targets."
+		fi
+	fi
+
+	if [[ "${CUDA_ARCHITECTURES}" == *120* || "${CUDA_ARCHITECTURES}" == *universal* ]]; then
+		if [[ -z "${CUDA_TOOLKIT_VERSION}" ]] || ! version_at_least "${CUDA_TOOLKIT_VERSION}" "12.8"; then
+			error "CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES} includes Blackwell, which requires CUDA Toolkit 12.8 or newer."
+		fi
+	fi
+
+	if (( CHECK_FAILURES > 0 )); then
+		cat >&2 <<'EOF'
+
+Build preflight failed. On Ubuntu 22.04/24.04, the usual build dependencies are:
+
+  sudo apt update
+  sudo apt install --no-install-recommends build-essential cmake pkg-config libssl-dev
+
+CUDA Toolkit and the NVIDIA Driver must be installed separately. Re-run './run doctor'
+after fixing the reported items, or set CUDA_ARCHITECTURES explicitly for a GPU-less
+cross-build.
+EOF
+		return 1
+	fi
+
+	ok "Build environment is ready"
+}
+
+run_build_preflight() {
+	CHECK_FAILURES=0
+	check_build_environment
+	if (( CHECK_FAILURES == 0 )); then
+		resolve_cuda_architectures
+	fi
+	validate_build_environment
+}
+
 usage() {
 	cat <<EOF
-Usage: ./run [build|start|precompute16|verify-precompute16|clean] [search options]
+Usage: ./run [build|doctor|start|precompute16|verify-precompute16|clean] [search options]
 
 Commands:
-  build  Configure and build the project
+	build  Configure and build the project
+	doctor Check the Linux build environment without compiling
 	start  Generate the fixed16 table in memory, then run the vanity key finder
 	precompute16  Generate and verify the fixed-position 16-bit table
 	verify-precompute16  Verify an existing fixed-position 16-bit table
@@ -32,7 +230,8 @@ Environment:
   BUILD_DIR   Build directory (default: ./build)
   BUILD_TYPE  CMake build type (default: Release)
   BUILD_JOBS  Number of parallel build jobs (default: detected CPU count)
-  CUDA_ARCHITECTURES  CUDA architectures (default: native)
+	CUDA_ARCHITECTURES  CUDA architectures (default: native)
+	UNIVERSAL_CUDA_ARCHITECTURES  Standard SM targets used by CUDA_ARCHITECTURES=universal
 	VANITY_MAX_REGISTER_COUNT  auto or 128 (default: 128)
 	VANITY_THREADS_PER_BLOCK   256 or 512 (default: 512)
 	VANITY_ATTEMPTS_PER_EXECUTION  Candidates per thread and launch (default: 10000)
@@ -41,23 +240,20 @@ EOF
 }
 
 build() {
-	local cuda_compiler="${CUDACXX:-$(command -v nvcc || true)}"
-	if [[ -z "${cuda_compiler}" && -x /usr/local/cuda/bin/nvcc ]]; then
-		cuda_compiler=/usr/local/cuda/bin/nvcc
-	fi
-	if [[ -z "${cuda_compiler}" ]]; then
-		echo "CUDA compiler not found; set CUDACXX or add nvcc to PATH." >&2
-		exit 1
-	fi
+	run_build_preflight
 
 	cmake -S "${PROJECT_DIR}" -B "${BUILD_DIR}" \
 		-DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-		-DCMAKE_CUDA_COMPILER="${cuda_compiler}" \
+		-DCMAKE_CUDA_COMPILER="${CUDA_COMPILER}" \
 		-DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
 				-DVANITY_MAX_REGISTER_COUNT="${VANITY_MAX_REGISTER_COUNT}" \
 				-DVANITY_THREADS_PER_BLOCK="${VANITY_THREADS_PER_BLOCK}" \
 		-DVANITY_ATTEMPTS_PER_EXECUTION="${VANITY_ATTEMPTS_PER_EXECUTION}"
 	cmake --build "${BUILD_DIR}" -j"${BUILD_JOBS}"
+}
+
+doctor() {
+	run_build_preflight
 }
 
 start() {
@@ -83,6 +279,9 @@ clean() {
 case "${1:-help}" in
 	build)
 		build
+		;;
+	doctor)
+		doctor
 		;;
 	start)
 		shift

@@ -11,7 +11,7 @@ jobs:
     name: Build Linux CUDA artifacts sequentially
     runs-on: ubuntu-24.04
     container:
-      image: nvidia/cuda:13.3.0-devel-ubuntu24.04
+      image: nvidia/cuda:12.9.1-devel-ubuntu22.04
 
     steps:
       - name: Check out repository
@@ -24,47 +24,28 @@ jobs:
             build-essential \
             cmake \
             git \
+            pkg-config \
             libssl-dev
 
-      - name: Build sm86, sm89, and sm120 release binaries
+      - name: Build universal Linux release binary
         env:
+          CUDA_ARCHITECTURES: universal
           VANITY_MAX_REGISTER_COUNT: '128'
           VANITY_THREADS_PER_BLOCK: '512'
           VANITY_ATTEMPTS_PER_EXECUTION: '10000'
           BUILD_TYPE: Release
         run: |
-          for architecture in 86 89 120; do
-            echo "Building sm_${architecture}..."
-            rm -rf "build-sm${architecture}"
-            CUDA_ARCHITECTURES="${architecture}" \
-              BUILD_DIR="${GITHUB_WORKSPACE}/build-sm${architecture}" \
-              bash ./run build
-            test -x "build-sm${architecture}/release/solana-vanity-cuda"
-            mkdir -p "artifacts/sm${architecture}"
-            cp "build-sm${architecture}/release/solana-vanity-cuda" \
-              "artifacts/sm${architecture}/solana-vanity-cuda"
-          done
+          rm -rf build-universal artifacts
+          BUILD_DIR="${GITHUB_WORKSPACE}/build-universal" bash ./run build
+          test -x build-universal/release/solana-vanity-cuda
+          mkdir -p artifacts
+          cp build-universal/release/solana-vanity-cuda \
+            artifacts/solana-vanity-cuda-linux-x86_64
 
-      - name: Upload Linux sm86 artifact
+      - name: Upload universal Linux artifact
         uses: actions/upload-artifact@v7
         with:
-          name: solana-vanity-cuda-linux-sm86
-          path: artifacts/sm86/solana-vanity-cuda
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload Linux sm89 artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: solana-vanity-cuda-linux-sm89
-          path: artifacts/sm89/solana-vanity-cuda
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload Linux sm120 artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: solana-vanity-cuda-linux-sm120
-          path: artifacts/sm120/solana-vanity-cuda
+          name: solana-vanity-cuda-linux-x86_64
+          path: artifacts/solana-vanity-cuda-linux-x86_64
           if-no-files-found: error
           retention-days: 14

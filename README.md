@@ -43,6 +43,7 @@ benchmarking, although individual cards may still benefit from local tuning.
 - CUDA Toolkit, including `nvcc`
 - CMake 3.22 or newer
 - A C17/C++20-capable host compiler
+- `pkg-config`
 - OpenSSL development files (`libssl-dev` on Debian/Ubuntu)
 - `nvidia-smi` available in `PATH`
 
@@ -58,6 +59,32 @@ configuration in one place:
 ```bash
 bash ./run build
 ```
+
+Before configuring CMake, the launcher checks the Linux distribution, CMake,
+GCC/G++, Make, `nvcc`, `pkg-config`, OpenSSL development files, and the GPU
+environment used for native architecture detection. Run the checks without
+compiling with:
+
+```bash
+bash ./run doctor
+```
+
+On Ubuntu 22.04/24.04, the usual host dependencies are:
+
+```bash
+sudo apt update
+sudo apt install --no-install-recommends build-essential cmake pkg-config libssl-dev
+```
+
+The NVIDIA Driver and CUDA Toolkit are installed separately. A build without a
+visible GPU is supported when `CUDA_ARCHITECTURES` is set explicitly, for
+example `CUDA_ARCHITECTURES=86 bash ./run build`.
+
+The Linux and Windows release workflows pin CUDA Toolkit 12.9.1 and build one
+universal binary per platform. `CUDA_ARCHITECTURES=universal` expands to the
+standard CUDA 12.9 targets from `sm_50` through `sm_121`. CUDA 12.9.x is used
+because the release must retain Maxwell support; CUDA 13.x is not a valid
+toolkit for this universal profile.
 
 The main executable is written to:
 
@@ -108,7 +135,7 @@ These environment variables are passed through to CMake:
 
 | Variable | Values | Default | Description |
 | --- | --- | --- | --- |
-| `CUDA_ARCHITECTURES` | CUDA architecture or `native` | `native` | Target GPU architecture, for example `89` for an RTX 3070 Ti or `120` for an RTX 5090. |
+| `CUDA_ARCHITECTURES` | CUDA architecture, `native`, or `universal` | `native` | Target GPU architecture, for example `89` for an RTX 3070 Ti, `120` for an RTX 5090, or `universal` for one binary containing all standard targets supported by the pinned CUDA Toolkit. |
 | `VANITY_MAX_REGISTER_COUNT` | `auto` or `128` | `128` | CUDA register limit. `auto` enables launch bounds; `128` applies `--maxrregcount=128`. |
 | `VANITY_THREADS_PER_BLOCK` | `256` or `512` | `512` | CUDA threads per block. |
 | `VANITY_ATTEMPTS_PER_EXECUTION` | Positive integer | `10000` | Candidate keys processed by each thread per kernel launch. |

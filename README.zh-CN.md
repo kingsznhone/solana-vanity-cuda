@@ -31,6 +31,7 @@
 - CUDA Toolkit，包括 `nvcc`
 - CMake 3.22 或更高版本
 - 支持 C17/C++20 的主机编译器
+- `pkg-config`
 - OpenSSL 开发文件（Debian/Ubuntu 上通常为 `libssl-dev`）
 - `nvidia-smi` 位于 `PATH` 中
 
@@ -43,6 +44,33 @@
 ```bash
 bash ./run build
 ```
+
+在进入 CMake 配置之前，启动脚本会检查 Linux 发行版、CMake、GCC/G++、
+Make、`nvcc`、`pkg-config`、OpenSSL 开发文件，以及用于本机架构检测的 GPU
+环境。可以只运行预检而不编译：
+
+```bash
+bash ./run doctor
+```
+
+Ubuntu 22.04/24.04 通常需要安装以下主机依赖：
+
+```bash
+sudo apt update
+sudo apt install --no-install-recommends build-essential cmake pkg-config libssl-dev
+```
+
+NVIDIA Driver 和 CUDA Toolkit 需要单独安装。如果机器没有可见 GPU，也可以
+显式指定目标架构进行交叉编译，例如：
+
+```bash
+CUDA_ARCHITECTURES=86 bash ./run build
+```
+
+Linux 和 Windows 的发布工作流统一固定使用 CUDA Toolkit 12.9.1，每个平台只
+编译一个 universal 二进制。`CUDA_ARCHITECTURES=universal` 会展开为从
+`sm_50` 到 `sm_121` 的 CUDA 12.9 标准架构列表。之所以固定使用 CUDA 12.9.x，
+是为了保留 Maxwell 支持；CUDA 13.x 不适用于这个 universal 配置。
 
 主程序生成于：
 
@@ -90,7 +118,7 @@ bash ./run build
 
 | 变量 | 可选值 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `CUDA_ARCHITECTURES` | CUDA 架构或 `native` | `native` | 目标 GPU 架构，例如 RTX 3070 Ti 使用 `89`，RTX 5090 使用 `120`。 |
+| `CUDA_ARCHITECTURES` | CUDA 架构、`native` 或 `universal` | `native` | 目标 GPU 架构，例如 RTX 3070 Ti 使用 `89`、RTX 5090 使用 `120`；`universal` 会将所有固定 Toolkit 支持的标准架构编译进一个二进制。 |
 | `VANITY_MAX_REGISTER_COUNT` | `auto` 或 `128` | `128` | CUDA 寄存器上限。`auto` 启用 launch bounds，`128` 使用 `--maxrregcount=128`。 |
 | `VANITY_THREADS_PER_BLOCK` | `256` 或 `512` | `512` | 每个线程块的 CUDA 线程数。 |
 | `VANITY_ATTEMPTS_PER_EXECUTION` | 正整数 | `10000` | 每个线程在一次 kernel 启动中处理的候选密钥数量。 |
