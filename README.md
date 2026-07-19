@@ -86,6 +86,11 @@ Use Semantic Versioning for releases. Keep a release tag such as `v0.2.0`
 consistent with the executable version `0.2.0`. The GitHub Actions workflows
 remain manually triggered; release publishing is performed separately.
 
+Windows release builds use static OpenSSL and MSVC runtime libraries, and CUDA
+runtime libraries are linked statically where supported. The NVIDIA driver is
+still required at runtime because `nvcuda.dll` is supplied by the installed
+GPU driver and cannot be bundled into the executable.
+
 To select a specific CUDA compiler, architecture, build directory, or build
 parallelism:
 

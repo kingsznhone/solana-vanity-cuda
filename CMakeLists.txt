@@ -23,6 +23,12 @@ if(NOT VANITY_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+([.-][0-9A-Za-z.-]+)?$")
     message(FATAL_ERROR "VANITY_VERSION must be a valid SemVer-like version, got: ${VANITY_VERSION}")
 endif()
 
+if(WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+    set(OPENSSL_MSVC_STATIC_RT TRUE)
+endif()
+
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 
 set(CMAKE_C_STANDARD 17)

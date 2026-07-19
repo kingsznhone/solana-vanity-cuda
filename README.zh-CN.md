@@ -70,6 +70,10 @@ cmake -S . -B build-version \
 发布版本遵循语义化版本规范。Git tag（例如 `v0.2.0`）应当与程序版本
 `0.2.0` 保持一致。GitHub Actions 仍然由手动触发，Release 发布单独进行。
 
+Windows 发布版本会使用静态 OpenSSL 和 MSVC runtime，并在支持的情况下静态
+链接 CUDA runtime。运行时仍然需要安装 NVIDIA 驱动，因为 `nvcuda.dll` 由显卡
+驱动提供，不能打包进可执行文件。
+
 可以指定 CUDA 编译器、架构、构建目录和并行编译数量：
 
 ```bash
