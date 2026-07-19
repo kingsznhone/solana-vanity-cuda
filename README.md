@@ -51,6 +51,30 @@ The launcher automatically uses the native CUDA architecture with CMake 3.24+
 and newer. With older CMake versions it queries the first visible GPU through
 `nvidia-smi`. You can override this behavior with `CUDA_ARCHITECTURES`.
 
+## Use a Release Binary
+
+Prebuilt Linux and Windows binaries are available from the [0.1.0 Release page](https://github.com/kingsznhone/solana-vanity-cuda/releases/tag/0.1.0).
+Download the binary for your platform and run it directly. The Linux binary
+must be marked executable after downloading:
+
+```bash
+chmod +x solana-vanity-cuda-linux-x86_64
+./solana-vanity-cuda-linux-x86_64 --help
+./solana-vanity-cuda-linux-x86_64 --prefix SoL --stop-after 1
+```
+
+On Windows PowerShell, run the `.exe` directly:
+
+```powershell
+.\solana-vanity-cuda-windows-x86_64.exe --help
+.\solana-vanity-cuda-windows-x86_64.exe --prefix SoL --stop-after 1
+```
+
+You can provide more than one `--prefix`, or use `--max-iterations COUNT` to
+bound a search. Release binaries do not require `nvcc`, CMake, or OpenSSL
+development packages, but runtime use still requires a compatible NVIDIA
+driver and CUDA-capable GPU. Keep generated keypairs and result files secure.
+
 ## Build
 
 The repository includes a build launcher that detects CUDA and keeps the build

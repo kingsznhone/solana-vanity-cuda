@@ -37,6 +37,29 @@
 
 在 CMake 3.24 及更高版本中，启动脚本会自动使用本机 CUDA 架构。对于更早版本，脚本会通过 `nvidia-smi` 查询第一块可见 GPU。也可以通过 `CUDA_ARCHITECTURES` 手动覆盖该行为。
 
+## 直接使用 Release 二进制
+
+可以从 [0.1.0 Release 页面](https://github.com/kingsznhone/solana-vanity-cuda/releases/tag/0.1.0)
+下载 Linux 和 Windows 的预编译二进制。下载对应平台的文件后即可直接运行。
+Linux 文件下载后需要先添加可执行权限：
+
+```bash
+chmod +x solana-vanity-cuda-linux-x86_64
+./solana-vanity-cuda-linux-x86_64 --help
+./solana-vanity-cuda-linux-x86_64 --prefix SoL --stop-after 1
+```
+
+Windows PowerShell 中可以直接运行 `.exe`：
+
+```powershell
+.\solana-vanity-cuda-windows-x86_64.exe --help
+.\solana-vanity-cuda-windows-x86_64.exe --prefix SoL --stop-after 1
+```
+
+可以重复指定多个 `--prefix`，也可以通过 `--max-iterations COUNT` 限制搜索
+次数。Release 二进制不需要安装 `nvcc`、CMake 或 OpenSSL 开发包，但运行时仍然
+需要兼容的 NVIDIA 驱动和支持 CUDA 的 GPU。生成的密钥对和结果文件请妥善保管。
+
 ## 编译
 
 仓库提供了统一的构建脚本，会自动检测 CUDA 并集中管理构建配置：
