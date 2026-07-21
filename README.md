@@ -16,6 +16,11 @@ compact range check during the search.
 This optimization strategy is intentionally specialized. **Suffix searches are
 not supported.** Only fixed leading Base58 prefixes are supported.
 
+> ⚠️ **Security warning:** The search algorithm does not use the standard
+> Ed25519 key-generation specification. Treat generated keypairs as
+> experimental and verify them independently before use. **Use at your own
+> risk.**
+
 ### Reported performance
 
 The searcher has been tested on an NVIDIA RTX 3070 Ti and RTX 5090:
